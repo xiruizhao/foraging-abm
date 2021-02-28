@@ -1,84 +1,68 @@
-### Goals
+## Goals
 
 Much of the literature on risk-preference focuses on the costs/benefits to the individual of being risk-seeking/risk-averse. But if we think of intergroup or interspecies competition, it seems that a group with more diversity will beat a group with less diversity in a dynamic environment, as long as there is resource/information sharing within the group.
 We would want to set up the simplest environment possible that would allow us to test this.
 Brainstorming: two groups, each with 30 people. 50 possible foraging sites. Each day, each person in each group can visit 1 foraging site. When they return home each night, the groups pool and share the rewards. If both groups visit the same site, the group with more members will get the rewards. (e.g. two people from group A visit site 1 and only 1 person from group B visits site 1, so group A get all the rewards) if it is a tie, then it goes by distance to the home site of the group.
 Once we have the basic environment set up we can look at diversity in agent parameters: learning rate, exploration/exploitation tradeoff, utility function, delay discounting, etc
 
-### TODO
+## TODO
 
-- [ ] Feb 18. Read [Julia Manual](https://docs.julialang.org/en/v1/manual/) and *Reinforcement Learning*.
-- [ ] Feb 25. Create a simple model with Agents.jl. One player. Environment
-- [ ] Mar 4.
+- [X] Feb 18. Skim [Julia Manual](https://docs.julialang.org/en/v1/manual/) and first two chapters of *Reinforcement Learning*.
+- [X] Feb 25. Learn [Agents.jl](https://juliadynamics.github.io/Agents.jl/stable/).
+- [ ] Mar 4. Implement Simple Environment.
+- [ ] Mar 11. Implement Complex Environments.
 - [ ] [HPC application](https://nyu.service-now.com/servicelink/catalog.do?sysparm_document_key=sc_cat_item,b0fc230be498d6408b4d97a033492665)
 
-### Simple Environment
+## Simple Environment
 
-+ Fixed # and position of patches
-+ But, patch quality is a random walk with some $`\sigma`$ (for some simulations we would have low sigma, others high sigma. If we want to get fancy we can do something like each patch has its own sigma, or use hidden-markov-model for patch quality)
-+ 30 patches and 30 foragers per group. (Something we can play with.) Forager/patch ratio is an important parameter.
++ Gridspace((100, 100))
++ 30 patches, random positions
++ 2 forager groups, 30 foragers per group. (Something we can play with.) Forager/patch ratio is an important parameter.
 
-```julia
-    deltaQ(forager, id, outcome, distance) = begin
-        f = forager
-        U = outcome^f.\rho / (1 + f.k * distance)
-        dQ = f.\alpha * (U - f.Q[id])
-        f.Q[id] = f.Q[id] + dQ
-    end
-```
+### Forager
 
-For the softmax step you just want to do 
-```julia
-    using StatsBase
-    softmax(v,b) = begin
-       d = sum(exp.(b .* v))
-       exp.(b .* v) ./ d
-    end
-    pick_patch(f::forager) = begin
-        sample(1:length(f.Q), pweights(softmax(f.Q, f.beta)))
-    end
-```
+1. Learning rate (same for self and vicarious) $`\alpha`$. $`\log(\alpha) \sim \mathscr{N} (\mu_{\log\alpha}, \sigma_{\log\alpha})`$
+2. Preferences $`k, \rho`$. $`\rho \sim \mathscr{U} (0.6, 1.3)`$, $`k \sim \mathscr{U} (0.001, 1), (k < 1)`$
+    Utility $`U = \frac{V^\rho}{1 + kd}`$ where d is euclidean distance.
+3. Softmax temperature $`\beta`$, $`\beta \sim \mathscr{U} (0.1 10)`$
+4. Q. $`\Delta Q = \alpha(U - Q)`$
 
-Forager Properties
+#### agent_step!
 
-1. Learning rate (self/vicarious), $`\alpha`$.  \alpha ~ exp(Normal(alpha_\mu,alpha_\sigma))
-2. Preferences, $`k, \rho`$  (Utility,  U = V^\rho/(1 + kD), k is discount factor, D is distance). rho ~ [0.6 1.3], k<1 [0.001 1]
-3. softmax temp \beta, P(x_i) = exp(-\beta Q(x_i)) / \sum_{all j} exp(-\beta (Q(x_j)) beta [0.1 10]
+1. Pick a patch (based on softmax of Q)
+2. Increment patch.visit_counts[gid]
 
-Patch Properties 
+### Patch
 
-1. Patch mu is a Gaussian Random Walk with \sigma_walk (change over time)
-2. Patch \sigma_patch (static property, how variability at each time)
+1. $`\mu`$ is a Gaussian Random Walk with $`\sigma_\text{walk}`$ (for some simulations we would have low sigma, others high sigma. If we want to get fancy we can do something like each patch has its own $`\sigma_\text{walk}`$, or use hidden-markov-model for patch quality)
+2. reward $`V \sim \mathscr{N}(\mu, \sigma)`$
 
-Forager Step()
+#### agent_step!
 
-1. Pick a patch (based on softmax of Q) and teleport to it.
-2. Patch determines the outcome
-3. Update Q (self)
-3. Return home
-4. share patch info (distance, outcome).
-5. Update Q (vicarious). All agents vicariously learn from other agents.
+1. Sample a reward
+2. Count foragers from each group. ~if A > B give food to A otherwise B. If A==B flip a coin~pick a group to award reward based on softmax of visit_counts
+3. Update Q of self and others. (no learning of "crowdedness" of patches)
 
-Patch Step()
+### Performance metric
 
-1. Sample from reward distribution to determine reward for this step
-2. Count foragers from each group. if A > B give food to A otherwise B. If A==B flip a coin.  if no foragers, do nothing.  
+1. cumulative reward (failed ones do not count) and cumulative distance (failed ones count)
 
-### Complex Environment I 
+## Complex Environment I
 
 As simple with the following changes:
 
++ Estimate other forager's reliabity and discount their info for updating Q?
 + Foragers wander around a grid world to find patches.
 + They have some sleep drive. So in the morning they head out and then they need to return home to sleep.
 + If they don't make it home before dark there is a chance of death.
 + They can die if they don't get enough food. Food is pooled in the group
-+ Each group has a food store, so if there is surplus food they can save it. Food has a decay rate. 
++ Each group has a food store, so if there is surplus food they can save it. Food has a decay rate.
 
-### Complex Environment II
+## Complex Environment II
 
 As Complex Environment I  with the following changes:
 
-+ If food storage crosses some threshold, can create new foragers. 
++ If food storage crosses some threshold, can create new foragers.
 + New property: is_baby. Babies eat but don't forage. after some # of time-steps is_baby is set to false.
 
 ```matlab
