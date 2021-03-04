@@ -63,7 +63,7 @@ As simple with the following changes:
 As Complex Environment I  with the following changes:
 
 + If food storage crosses some threshold, can create new foragers.
-+ New property: is_baby. Babies eat but don't forage. after some # of time-steps is_baby is set to false.
++ New property: age. Babies (age< 21 days) eat but don't forage.  Probabilty of death increases with age? 
 
 ```matlab
 function out = pick_with_prob(items, probs, varargin)
