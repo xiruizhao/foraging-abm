@@ -34,24 +34,19 @@ Once we have the basic environment set up we can look at diversity in agent para
 
 ### Patch
 
-1. $`\mu`$ is a Gaussian Random Walk with $`\sigma_\text{walk}`$ (for some simulations we would have low sigma, others high sigma. If we want to get fancy we can do something like each patch has its own $`\sigma_\text{walk}`$, or use hidden-markov-model for patch quality)
+1. $`\mu`$ draws from a Gaussian and is a Gaussian Random Walk with $`\sigma_\text{walk}`$ (for some simulations we would have low sigma, others high sigma. If we want to get fancy we can do something like each patch has its own $`\sigma_\text{walk}`$, or use hidden-markov-model for patch quality)
 2. reward $`V \sim \mathscr{N}(\mu, \sigma)`$
 
 #### agent_step!
 
 1. Sample a reward
-2. Count foragers from each group. ~if A > B give food to A otherwise B. If A==B flip a coin~pick a group to award reward based on softmax of visit_counts
-3. Update Q of self and others. (no learning of "crowdedness" of patches)
-
-### Performance metric
-
-1. cumulative reward (failed ones do not count) and cumulative distance (failed ones count)
+2. Count foragers from each group. ~if A > B give food to A otherwise B. If A==B flip a coin~pick a group to give reward based on softmax of visit_counts
+3. Update Q of self and others. (there is learning of "crowdedness" of patches)
 
 ## Complex Environment I
 
 As simple with the following changes:
 
-+ Estimate other forager's reliabity and discount their info for updating Q?
 + Foragers wander around a grid world to find patches.
 + They have some sleep drive. So in the morning they head out and then they need to return home to sleep.
 + If they don't make it home before dark there is a chance of death.
@@ -63,7 +58,7 @@ As simple with the following changes:
 As Complex Environment I  with the following changes:
 
 + If food storage crosses some threshold, can create new foragers.
-+ New property: age. Babies (age< 21 days) eat but don't forage.  Probabilty of death increases with age? 
++ New property: age. Babies (age< 21 days) eat but don't forage.  Probabilty of death increases with age?
 
 ```matlab
 function out = pick_with_prob(items, probs, varargin)
