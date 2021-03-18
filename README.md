@@ -43,45 +43,19 @@ Once we have the basic environment set up we can look at diversity in agent para
 2. Count foragers from each group. ~if A > B give food to A otherwise B. If A==B flip a coin~pick a group to give reward based on softmax of visit_counts
 3. Update Q of self and others. (there is learning of "crowdedness" of patches)
 
-## Complex Environment I
+Panel A: rew rate v time group by group with thin line individuals
+Panel B: normilize against group with perfect information (top n patches)
 
-As simple with the following changes:
+\rho = 1 risk neutral, different sigma, plot log(CRA/CRB) as heatmap
 
+min(group A)
+
+## Complex Environment
+Death and reproduction
 + Foragers wander around a grid world to find patches.
 + They have some sleep drive. So in the morning they head out and then they need to return home to sleep.
 + If they don't make it home before dark there is a chance of death.
 + They can die if they don't get enough food. Food is pooled in the group
 + Each group has a food store, so if there is surplus food they can save it. Food has a decay rate.
-
-## Complex Environment II
-
-As Complex Environment I  with the following changes:
-
 + If food storage crosses some threshold, can create new foragers.
 + New property: age. Babies (age< 21 days) eat but don't forage.  Probabilty of death increases with age?
-
-```matlab
-function out = pick_with_prob(items, probs, varargin)
-% out = pick_with_prob(items, probabilities, ['out_size', 1])
-% Inputs:
-% items: a list (cell-array or numeric array) of items that you would like to sample from
-% probabilities : A numeric vector that describes the ratios of how often you would like each item.
-% out_size (optional) : how many time you would like to sample from items.
-%
-% Example:
-% poke = pick_with_prob({'MidR', 'BotC', 'MidL'},[5 1 1]);
-% This will return a cell array of size (1,1) and 5/7 times it will be MidR, 1/7 it will be BotC and 1/7 it will be MidL.
-
-        out_size = utils.inputordefault('out_size', [1,1], varargin);
-        numel_out = prod(out_size);
-        if nargin==1
-                probs = ones(size(items));
-        end
-
-
-
-        cumprob = cumsum(probs/sum(probs));
-
-        ind = stats.qfind(cumprob, rand(1,numel_out));
-        out = reshape(items(ind+1),out_size);
-```
