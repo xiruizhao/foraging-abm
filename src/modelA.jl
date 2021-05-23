@@ -3,7 +3,6 @@ mutable struct ForagerA <: Agents.AbstractAgent
     pos::Dims{2}
     gid::Int # group id
     α::Float64 # learning rate ∈(0, 1); α↑ => discount past experience
-    speed_rank::Int # speed ranking of foragers
     ρ::Float64 # utility exponent ∈(0, 1) => ρ↑ => risk tolerance↑; (1, ∞) irrational, excluded
     β::Float64 # softmax temperature; β↑ => exploit↑, explore↓
     chosen_patch::Int # chosen patch at current step = mn_softmax_sample(Q, β)
@@ -14,10 +13,10 @@ end
 mutable struct PatchA <: Agents.AbstractAgent
     id::Int
     pos::Dims{2}
-    base::Float64
-    capacity::Float64 # midpoint
-    decay::Float64 # reward decay rate
-    # rew = base/(1 + exp(decay*(faster_foragers_count - capacity)))
+    μ_rew::Float64
+    σ_rew::Float64
+    rew_sampler::Distributions.Normal{Float64}
+    shock_prob::Float64
     visited_by::Vector{ForagerA}
 end
 function step_modelA!(model::Agents.ABM)
@@ -33,17 +32,14 @@ function step_modelA!(model::Agents.ABM)
     # activate patches
     for patch in model.patches
         if length(patch.visited_by) > 0 # skip unvisited patches
-            sort!(patch.visited_by; by=x->x.speed_rank)
-            faster_foragers_count = 0
             learning_store = [Float64[] for _ in 1:length(model.foragers)]
             for forager in patch.visited_by
-                forager.rew = patch.base/(1+exp(patch.decay*(faster_foragers_count - patch.capacity)))
+                forager.rew = rand(patch.rew_sampler)
                 push!(learning_store[forager.gid], forager.rew)
                 U = sym_utility_risk(forager.rew, forager.ρ)
                 forager.Q[patch.id] += forager.α * (U - forager.Q[patch.id])
-                faster_foragers_count += 1
             end
-            # in-group communication
+            # in-group communication for all groups
             # if model.comm
             #     for (gid, rews) in enumerate(learning_store)
             #         if length(rews) > 0
@@ -73,17 +69,25 @@ function step_modelA!(model::Agents.ABM)
             end
             empty!(patch.visited_by)
         end
+        if rand() < patch.shock_prob
+            patch.μ_rew = rand(model.μ_rew_sampler)
+            patch.rew_sampler = Distributions.Normal(patch.μ_rew, patch.σ_rew)
+        end
     end
 end
 function init_modelA(;
-    forager_ns=[30, 30],
-    μ_logαs=[log(0.01), log(0.01)], σ_logαs=[0.3, 0.3],
-    μ_logρs=[log(0.9), log(0.9)], σ_logρs=[0.03, 0.03],
-    μ_logβs=[log(0.72), log(0.72)], σ_logβs=[0.8, 0.8],
+    forager_grp_n=2,
+    forager_n=30,
+    copy_α=true,
+    μ_logα=log(0.1), σ_logα=0,
+    copy_ρ=true,
+    μ_logρ=log(1), σ_logρ=0, # disable risk preference
+    copy_β=true,
+    μ_logβ=log(5), σ_logβ=0,
     patch_n=50,
-    μ_base=6,
-    capacity=sum(forager_ns)/2,
-    decay=1.0,
+    μ_μ_rew=5,
+    σ_rew_perc=0.3,
+    shock_prob=0,
     comm=false,
 )
     model = Agents.ABM(
@@ -91,59 +95,75 @@ function init_modelA(;
                Agents.GridSpace((1,1));
                properties=Dict(
                                :patches=>Vector{PatchA}(undef, patch_n),
-                               :foragers=>[Vector{ForagerA}(undef, forager_n) for forager_n in forager_ns],
-                               :comm=>comm
+                               :foragers=>[Vector{ForagerA}(undef, forager_n) for _ in 1:forager_grp_n],
+                               :comm=>comm,
+                               :μ_rew_sampler=>Distributions.Poisson(μ_μ_rew),
                               ),
                warn=false
                )
     # add patches
-    bases = sort(rand(Distributions.Poisson(μ_base), patch_n))
+    μ_rews = sort(rand(model.μ_rew_sampler, patch_n))
+    σ_rews = μ_rews .* σ_rew_perc
     for i in 1:patch_n
-        model.patches[i] = Agents.add_agent!((1,1), PatchA, model, bases[i], capacity, decay, ForagerA[])
+        model.patches[i] = Agents.add_agent!((1,1), PatchA, model, μ_rews[i], σ_rews[i], Distributions.Normal(μ_rews[i], σ_rews[i]), shock_prob, ForagerA[])
     end
     # add foragers
-    speed_ranks = Random.randperm(sum(forager_ns))
-    sri = 1
-    for (gid, forager_n) in enumerate(forager_ns)
-        αs = rand(Distributions.LogNormal(μ_logαs[gid], σ_logαs[gid]), forager_n)# log(α) ∼ 𝒩 (μ_α, σ_α)
-        ρs = rand(Distributions.LogNormal(μ_logρs[gid], σ_logρs[gid]), forager_n) # log(ρ) ∼ 𝒩 (μ_logρ, σ_logρ)
-        βs = rand(Distributions.LogNormal(μ_logβs[gid], σ_logβs[gid]), forager_n) # log(β) ∼ 𝒩 (μ_logβ, σ_logβ)
+    # αs = rand(Distributions.Uniform(0.07, 0.13), 1000)
+    # ρs = ones(1000)
+    # βs = rand(Distributions.Uniform(4, 6), 1000)
+    #
+    if copy_α
+        αs = rand(Distributions.LogNormal(μ_logα, σ_logα), forager_n)# log(α) ∼ 𝒩 (μ_α, σ_α)
+    end
+    if copy_ρ
+        ρs = rand(Distributions.LogNormal(μ_logρ, σ_logρ), forager_n) # log(ρ) ∼ 𝒩 (μ_logρ, σ_logρ)
+    end
+    if copy_β
+        βs = rand(Distributions.LogNormal(μ_logβ, σ_logβ), forager_n) # log(β) ∼ 𝒩 (μ_logβ, σ_logβ)
+    end
+    for gid in 1:forager_grp_n
+        if !copy_α
+            αs = rand(Distributions.LogNormal(μ_logα[gid], σ_logα[gid]), forager_n)# log(α) ∼ 𝒩 (μ_α, σ_α)
+        end
+        if !copy_ρ
+            ρs = rand(Distributions.LogNormal(μ_logρ[gid], σ_logρ[gid]), forager_n) # log(ρ) ∼ 𝒩 (μ_logρ, σ_logρ)
+        end
+        if !copy_β
+            βs = rand(Distributions.LogNormal(μ_logβ[gid], σ_logβ[gid]), forager_n) # log(β) ∼ 𝒩 (μ_logβ, σ_logβ)
+        end
         for i in 1:forager_n
-            model.foragers[gid][i] = Agents.add_agent!((1,1), ForagerA, model, gid, αs[i], speed_ranks[i], ρs[i], βs[i], 0, 0.0, ones(patch_n))
-            sri += 1
+            model.foragers[gid][i] = Agents.add_agent!((1,1), ForagerA, model, gid, αs[i], ρs[i], βs[i], 0, 0.0, ones(patch_n))
         end
     end
     model
 end
-function collect_modelA(model; steps=1000)
-    patch_static = DataFrames.DataFrame(id=Int[], base=Float64[])
-    forager_static = DataFrames.DataFrame(id=Int[], gid=Int[], α=Float64[], speed_rank=Int[], ρ=Float64[], β=Float64[], U=Vector{Float64}[]) # U is the real utility of every patch
+function collect_modelA(model; steps=3000)
+    patch_static = DataFrames.DataFrame(id=Int[], μ_rew=Float64[], σ_rew=Float64[])
+    patch_dynamic = DataFrames.DataFrame(id=Int[], step=Int[], μ_rew=Float64[])
+    forager_static = DataFrames.DataFrame(id=Int[], gid=Int[], α=Float64[], ρ=Float64[], β=Float64[], U=Vector{Float64}[]) # U is the real utility of every patch
     forager_dynamic = DataFrames.DataFrame(step=Int[], id=Int[], gid=Int[], chosen_patch=Int[], rew=Float64[], Q=Vector{Float64}[])
     for patch in model.patches
-        push!(patch_static, (patch.id, patch.base))
+        push!(patch_static, (patch.id, patch.μ_rew, patch.σ_rew))
     end
-    U_scale = 1 + exp(model.patches[1].decay*(-model.patches[1].capacity))
     for forager in vcat(model.foragers...)
-        push!(forager_static, (forager.id, forager.gid, forager.α, forager.speed_rank, forager.ρ, forager.β, (patch_static.base./U_scale).^forager.ρ))
+        push!(forager_static, (forager.id, forager.gid, forager.α, forager.ρ, forager.β, (patch_static.μ_rew).^forager.ρ))
     end
     for step in 1:steps
         Agents.step!(model, Agents.dummystep, step_modelA!, 1)
+        for patch in model.patches
+            push!(patch_dynamic, (patch.id, step, patch.μ_rew))
+        end
         for forager in vcat(model.foragers...)
             push!(forager_dynamic, (step, forager.id, forager.gid, forager.chosen_patch, forager.rew, copy(forager.Q)))
         end
     end
-    patch_static, forager_static, forager_dynamic, model
-end
-function shock_modelA(model; steps=1000, μ_base=10, σ_base=3)
-    for patch in model.patches
-        patch.base = rand(Distributions.Normal(μ_base, σ_base))
-    end
-    collect_modelA(model; steps)
+    patch_static, patch_dynamic, forager_static, forager_dynamic
 end
 function plot_modelA(ps, fs, fd)
     ps.id = map(string, ps.id)
-    choice_plts = []
-    Q_plts = []
+    gcp = [] # group choice plots
+    cp = [] # agent choice plots
+    qp = [] # agent Q plots
     rew_plts = []
     forager_grp_n = fd.gid[end]
     forager_n = nrow(fs)
@@ -152,7 +172,6 @@ function plot_modelA(ps, fs, fd)
     binwidth = fd.step[end] ÷ bin_n
 
     DataFrames.transform!(fd, :step => (x->(x .- 1) .÷ binwidth .* binwidth) => :stepbin)
-    # barplot of patch bases
     # group level choice
     gfd = @linq fd |>
         groupby([:stepbin, :gid]) |>
@@ -197,53 +216,4 @@ function plot_modelA(ps, fs, fd)
     βd = @df fs density(:β, group=:gid, title="β distribution")
     choice_plts, Q_plts, rew_plt, αd, ρd, βd
     #plot(choice_plts[3], barbase, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
-end
-function test1()
-    # one forager, ten patches
-    model1 = init_modelA(;
-        forager_ns=[1],
-        μ_logαs=[log(0.1)], σ_logαs=[0.0],
-        μ_logρs=[log(0.9)], σ_logρs=[0.0],
-        μ_logβs=[log(0.72)], σ_logβs=[0.0],
-        patch_n=10,
-    )
-    collect_modelA(model1)
-end
-function test2()
-    # ten foragers, ten patches
-    model1 = init_modelA(;
-        forager_ns=[10],
-        μ_logαs=[log(0.1)], σ_logαs=[0.3],
-        μ_logρs=[log(0.9)], σ_logρs=[0.03],
-        μ_logβs=[log(0.72)], σ_logβs=[0.8],
-        patch_n=10,
-    )
-    collect_modelA(model1)
-end
-function test3()
-    # two groups of 5 foragers with different σ_logα
-    model1 = init_modelA(;
-        σ_logαs=[0.2, 0.3],
-        patch_n=10,
-        forager_ns=[5, 5],
-    )
-    collect_modelA(model1)
-end
-function test4()
-    # two groups of 5 foragers with different σ_logρ
-    model1 = init_modelA(;
-        σ_logρs=[0.01, 0.03],
-        patch_n=10,
-        forager_ns=[5, 5],
-    )
-    collect_modelA(model1)
-end
-function test5()
-    # two groups of 5 foragers with different σ_logρ
-    model1 = init_modelA(;
-        σ_logβs=[0.6, 0.8],
-        patch_n=10,
-        forager_ns=[5, 5],
-    )
-    collect_modelA(model1)
 end

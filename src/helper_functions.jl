@@ -31,6 +31,7 @@ function entropy(x::Vector{T}) where T
     -sum(prob .* log.(2, prob))
 end
 function mn_softmax_sample(x, β) # maximum-normalized
+    # y = copy(x)
     y = x ./ maximum(x)
     y .= exp.(β .* y)
     y ./= sum(y)
