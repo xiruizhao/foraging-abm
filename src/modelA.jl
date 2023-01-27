@@ -217,3 +217,39 @@ function plot_modelA(ps, fs, fd)
     choice_plts, Q_plts, rew_plt, αd, ρd, βd
     #plot(choice_plts[3], barbase, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
 end
+
+function one_run()
+    # constant
+    nrun = 1000 # number of simulation runs per config
+    steps = 3000
+    patch_n = 50
+    forager_grp_n = 1
+    forager_n = 1
+    ρ = 1
+    μ_μ_rew = 5
+    shock_prob = 0
+    # variable
+    βs = collect(0:0.5:15)
+    nrow = length(βs)
+    αs = collect(0.1:0.01:0.2)
+    ncol = length(αs)
+    perfs = [[Threads.Atomic() for _ in 1:nrow] for __ in 1:ncol]
+    model = Agents.ABM( Union{ForagerA, PatchA}, Agents.GridSpace((1,1)); properties=Dict( :patches=>Vector{PatchA}(undef, patch_n), :foragers=>[Vector{ForagerA}(undef, ncol) for _ in 1:nrow], :μ_rew_sampler=>Distributions.Poisson(μ_μ_rew), :comm=>false), warn=false)
+    # constant patches
+    μ_rews = sort(rand(model.μ_rew_sampler, patch_n))
+    σ_rews = μ_rews .* 0.0
+    for i in 1:patch_n
+        model.patches[i] = Agents.add_agent!((1,1), PatchA, model, μ_rews[i], σ_rews[i], Distributions.Normal(μ_rews[i], σ_rews[i]), shock_prob, ForagerA[])
+    end
+    runs = []
+    for i in 1:nrow
+        for j in 1:ncol
+            model.foragers[i][j] = Agents.add_agent!((1,1), ForagerA, model, 1, αs[j], ρ, βs[i], 0, 0.0, ones(patch_n))
+        end
+    end
+    _, _, fs, fd = collect_modelA(model)
+    run = @linq fd |>
+        groupby([:id]) |>
+        combine(sumrew = sum(:rew))
+    fs, run
+end

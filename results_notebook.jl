@@ -11,6 +11,8 @@ begin
 	using PlutoUI
 	using DataFrames
 	using DataFramesMeta
+	import Agents
+	import Distributions
 	using Statistics
 	import XiruiModels as XM
 	import Random
@@ -92,7 +94,59 @@ let forager_grp_n = 2, σ_logβ = 0.1
 	d1
 end
 
+# ╔═╡ 14471616-1f8b-4e1e-8a8c-3e4376b4086e
+#=
+let patch_n = 50, forager_grp_n = 1, forager_n = 1, α = 0.1, ρ = 1, μ_μ_rew = 5, shock_prob = 0
+	Random.seed!(seed)
+	βs = collect(0:0.01:10)
+	forager_pool_n = length(βs)
+	perfs = Vector{Float64}(undef, forager_pool_n)
+	model = Agents.ABM(
+               Union{XM.ForagerA, XM.PatchA},
+               Agents.GridSpace((1,1));
+               properties=Dict(
+                               :patches=>Vector{XM.PatchA}(undef, patch_n),
+                               :foragers=>[Vector{XM.ForagerA}(undef, forager_n) for _ in 1:forager_grp_n], 
+							   :μ_rew_sampler=>Distributions.Poisson(μ_μ_rew),
+							    :comm=>false
+                              ),
+               warn=false
+               )
+	# add patches
+	μ_rews = sort(rand(model.μ_rew_sampler, patch_n))
+    σ_rews = μ_rews .* 0.3
+    for i in 1:patch_n
+        model.patches[i] = Agents.add_agent!((1,1), XM.PatchA, model, μ_rews[i], σ_rews[i], Distributions.Normal(μ_rews[i], σ_rews[i]), shock_prob, XM.ForagerA[])
+    end
+    for i in 1:forager_pool_n
+	    model.foragers[1][1] = Agents.add_agent!((1,1), XM.ForagerA, model, 1, α, ρ, βs[i], 0, 0.0, ones(patch_n))
+		_, _, _, fd = XM.collect_modelA(model)
+		perfs[i] = sum(fd.rew)
+		Agents.kill_agent!(model.foragers[1][1], model)
+	end
+	plot(perfs)
+end
+=#
+
+# ╔═╡ e7bd7fee-c05a-45bb-8b20-d146545ebb16
+begin
+	runs = repeat(Any[0], 10)
+	Threads.@threads for i in 1:10
+		runs[i] =  XM.one_run()
+	end
+	fs, fd = runs[1]
+	fs = @linq fs |>
+		select(:id, :α, :β)
+	fs.sumrew = fd.sumrew
+	z = Matrix(unstack(fs, :β, :α, :sumrew))'
+    x = z[1, :]
+    z = z[2:end, :]
+    heatmap(0:0.5:15, 0.1:0.01:0.2, z, xlabel="β", ylabel="α", title="total reward")
+end
+
 # ╔═╡ Cell order:
 # ╠═bceab76a-b999-11eb-27aa-e10cce4a889a
 # ╟─175388a2-e54a-4487-8df6-f86242042763
 # ╠═354ac196-b746-4870-b3cd-5676ffcb39ba
+# ╠═14471616-1f8b-4e1e-8a8c-3e4376b4086e
+# ╠═e7bd7fee-c05a-45bb-8b20-d146545ebb16

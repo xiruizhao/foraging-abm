@@ -429,9 +429,9 @@ version = "3.100.0+3"
 
 [[LZO_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "f128cd6cd05ffd6d3df0523ed99b90ff6f9b349a"
+git-tree-sha1 = "e5b909bcf985c5e2605737d2ce278ed791b89be6"
 uuid = "dd4b983a-f0e5-5f8d-a1b7-129d4a5fb1ac"
-version = "2.10.0+3"
+version = "2.10.1+0"
 
 [[LaTeXStrings]]
 git-tree-sha1 = "c7f1c695e06c01b95a67f0cd1d34994f3e7db104"
@@ -634,9 +634,9 @@ version = "0.4.0"
 
 [[OffsetArrays]]
 deps = ["Adapt"]
-git-tree-sha1 = "47b443d2ccc8297a4c538f55f8fd828ad58599ab"
+git-tree-sha1 = "c3a3d8d45fb533e88e3ab97748d40ee85711d988"
 uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.8.0"
+version = "1.9.0"
 
 [[Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -697,9 +697,9 @@ version = "1.1.0"
 
 [[Pixman_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "6a20a83c1ae86416f0a5de605eaea08a552844a3"
+git-tree-sha1 = "b4f5d02549a10e20780a24fce72bea96b6329e29"
 uuid = "30392449-352a-5448-841d-b1acce4e97dc"
-version = "0.40.0+0"
+version = "0.40.1+0"
 
 [[Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -1157,9 +1157,9 @@ version = "0.1.6+4"
 
 [[libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "6abbc424248097d69c0c87ba50fcb0753f93e0ee"
+git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.37+6"
+version = "1.6.38+0"
 
 [[libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
