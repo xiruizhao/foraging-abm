@@ -32,7 +32,7 @@ function entropy(x::Vector{T}) where T
 end
 function mn_softmax_sample(x, β) # maximum-normalized
     y = x ./ maximum(x)
-    y .= exp.(β .* x)
+    y .= exp.(β .* y)
     y ./= sum(y)
     StatsBase.sample(StatsBase.pweights(y))
 end

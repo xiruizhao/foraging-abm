@@ -1,16 +1,17 @@
 module XiruiModels
 
 import Agents
+import Agents.Pathfinding
 using DataFrames
 using DataFramesMeta
 import Distributions
 import Plots
+import Formatting
 import Random
 import Statistics
 import StatsBase
-import StatsPlots
+using StatsPlots
 # import InteractiveDynamics
-#
 
 include("helper_functions.jl")
 #=
@@ -22,6 +23,9 @@ function mn_softmax_sample(x::Vector{T}, β)::Int where T # maximum-normalized
 function sym_utility_risk(V, ρ)::Float64
 =#
 include("modelA.jl")
+#
+#
+#
 #=
 # gridspace is not used
 function init_modelA(
@@ -34,19 +38,17 @@ function init_modelA(
     capacity=sum(forager_ns)/2,
     decay=1.0,
 )::Agents.ABM
-function collect_model1(model; steps=1000)::NTuple{3, DataFrames.DataFrame} # patch_static, forager_static, forager_dynamic
-function shock_model1(model; steps=1000, shock=3)::NTuple{3, DataFrames.DataFrame}
+function collect_modelA(model; steps=1000)::NTuple{3, DataFrames.DataFrame} # patch_static, forager_static, forager_dynamic, model
+function shock_modelA(model; steps=1000, μ_base=10, σ_base=10)::NTuple{3, DataFrames.DataFrame}
 =#
-include("modelB.jl")
+# include("modelB.jl")
 #=
-# gridspace is used
-# moves via diagonal or moves by countdown?
+# gridspace space is used
+# move via Agents.Pathfinding
+# agent state transitions home, return, leave, forage
+# patches grow by τ, what's the reward? 10%?
 # A, grows back τ, eated percentage β
-function init_model2()::Agents.ABM
-function collect_model2()::NTuple{4, DataFrames.DataFrame}
-=#
-include("modelC.jl")
-#=
-# agent state transitions home, return, leave, forage, patches grow by τ, what's the reward? 10%?
+function init_modelB()::Agents.ABM
+function collect_modelB()::NTuple{4, DataFrames.DataFrame}
 =#
 end

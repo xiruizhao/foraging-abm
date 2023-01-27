@@ -1,8 +1,17 @@
 ### A Pluto.jl notebook ###
-# v0.14.4
+# v0.14.5
 
 using Markdown
 using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : missing
+        el
+    end
+end
 
 # ╔═╡ 7d1c8c92-7c2b-11eb-206d-6d64d8f191fb
 using Revise
@@ -19,18 +28,35 @@ using Statistics
 # ╔═╡ 60273126-861f-11eb-3782-7b239664506e
 using StatsPlots
 
+# ╔═╡ 74351fa8-bc36-44b9-a1e1-75ef7f783755
+using PlutoUI
+
 # ╔═╡ 97800a90-809e-11eb-0158-3b2f7cdad4b0
 import XiruiModels as XM
 
+# ╔═╡ ca2e7651-d13a-471a-b587-6a4bea95b236
+import Random
+
+# ╔═╡ 26a510ae-7ff0-4160-a539-aa1fe2eed85a
+Random.seed!(20210521)
+
 # ╔═╡ fb85598c-bf7d-49ed-8e3d-2eaea586252a
 md"# I. 10 patches, 1 forager"
+
+# ╔═╡ 36e34c05-c874-48a4-ba0b-b81324c6104f
+plot(ones(Int, 4), rand(4), markersize=4:8, seriestype=:scatter)
+
+# ╔═╡ 082e02b9-6a51-49ae-a5e3-b228a78d8f91
+ones(Int, 4)
 
 # ╔═╡ 97276fc0-809e-11eb-1a5a-2f8d06584d48
 begin
 	patch_n = 10;
 	ps, fs, fd, model = XM.test1();
 	barbase, cp, qp = XM.modelA_heatmaps(ps, fs, fd); 
-	plot(cp[2], barbase, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
+	#cp[1]
+	#plot!(zeros(Int, patch_n), collect(1:patch_n).-0.5, markersize=ps.base, seriestype=:scatter, label="base")
+	#plot(cp[2], barbase, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
 end
 
 # ╔═╡ 7facd9ae-a32b-4f70-9d0b-28de3e38539b
@@ -67,11 +93,23 @@ plot(qp2[1], barbase2, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
 md"# II. 10 patches, 10 foragers"
 
 # ╔═╡ 16870639-fbe0-476e-88ae-776d4bafe42c
-begin
-	ps3, fs3, fd3, model3 = XM.test2();
+let ps3, fs3, fd3, model3 = XM.test2()
 	barbase3, cp3, qp3 = XM.modelA_heatmaps(ps3, fs3, fd3); 
 	plot(cp3[1], barbase3, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
 end
+
+# ╔═╡ b8cbe5dd-38d9-41e8-8bc4-264c84316510
+@bind fpicker Slider(1:10)
+
+# ╔═╡ 1971995d-411b-43fb-ad50-0c4509fc316d
+plot(qp3[fpicker], barbase3, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y, size=(500,300))
+
+# ╔═╡ e998aed3-2680-4fbd-8262-053768b0eddc
+scatter(fs3.α, fs3.β)
+
+# ╔═╡ 50a004c0-6eda-4786-a632-7c932f49c13a
+scatter(rand(10), rand(10), markersize=rand(1:10,10))
+
 
 # ╔═╡ b431c265-2120-475d-8cea-e34e16fa9a19
 md"# III 10 patches, 2 groups of 5 foragers
@@ -80,15 +118,18 @@ md"# III 10 patches, 2 groups of 5 foragers
 # ╔═╡ 268e4e6d-a4c8-4e02-862e-a8c7989558d3
 begin
 	ps4, fs4, fd4, model4 = XM.test3();
-	barbase4, cp4, qp4 = XM.modelA_heatmaps(ps4, fs4, fd4);
+	cp4, qp4, ad, rd, bd = XM.modelA_heatmaps(ps4, fs4, fd4);
 	md"## group1 σ_logα=0.2, group2 0.3"
 end
 
+# ╔═╡ 5b02e113-b3aa-403f-a615-476bf2b0dbb9
+rd
+
 # ╔═╡ b4a023d0-8a43-44bd-95e8-a49788b05ec7
-plot(cp4[1], barbase4, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
+plot(cp4[1], barbase4, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y, size=(400,300))
 
 # ╔═╡ b8838616-21c4-4ef1-9e47-d20d6f77f6ce
-plot(cp4[2], barbase4, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
+plot(cp4[5], barbase4, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y, size=(400,300))
 
 # ╔═╡ f3afc090-0af6-4b79-81a1-abae99b0118d
 begin
@@ -151,8 +192,13 @@ end
 # ╠═483e172c-8636-11eb-28e0-fbc279a1ef09
 # ╠═b9cf65de-864b-11eb-02a7-a521105ea77f
 # ╠═60273126-861f-11eb-3782-7b239664506e
+# ╠═74351fa8-bc36-44b9-a1e1-75ef7f783755
 # ╠═97800a90-809e-11eb-0158-3b2f7cdad4b0
+# ╠═ca2e7651-d13a-471a-b587-6a4bea95b236
+# ╠═26a510ae-7ff0-4160-a539-aa1fe2eed85a
 # ╠═fb85598c-bf7d-49ed-8e3d-2eaea586252a
+# ╠═36e34c05-c874-48a4-ba0b-b81324c6104f
+# ╠═082e02b9-6a51-49ae-a5e3-b228a78d8f91
 # ╠═97276fc0-809e-11eb-1a5a-2f8d06584d48
 # ╠═7facd9ae-a32b-4f70-9d0b-28de3e38539b
 # ╠═bf0b4179-5fee-47d8-a2c3-597e44bde9a1
@@ -161,8 +207,13 @@ end
 # ╠═a62b9dfe-8592-11eb-3a54-e72a8dbcc1be
 # ╠═b02fb4db-2be4-4bb2-a339-619a55fd2bb6
 # ╠═16870639-fbe0-476e-88ae-776d4bafe42c
+# ╠═1971995d-411b-43fb-ad50-0c4509fc316d
+# ╠═b8cbe5dd-38d9-41e8-8bc4-264c84316510
+# ╠═e998aed3-2680-4fbd-8262-053768b0eddc
+# ╠═50a004c0-6eda-4786-a632-7c932f49c13a
 # ╠═b431c265-2120-475d-8cea-e34e16fa9a19
 # ╠═268e4e6d-a4c8-4e02-862e-a8c7989558d3
+# ╠═5b02e113-b3aa-403f-a615-476bf2b0dbb9
 # ╠═b4a023d0-8a43-44bd-95e8-a49788b05ec7
 # ╠═b8838616-21c4-4ef1-9e47-d20d6f77f6ce
 # ╠═f3afc090-0af6-4b79-81a1-abae99b0118d

@@ -43,8 +43,24 @@ function step_modelA!(model::Agents.ABM)
                 forager.Q[patch.id] += forager.α * (U - forager.Q[patch.id])
                 faster_foragers_count += 1
             end
-            # vicarious learning
-            for (gid, rews) in enumerate(learning_store)
+            # in-group communication
+            # if model.comm
+            #     for (gid, rews) in enumerate(learning_store)
+            #         if length(rews) > 0
+            #             mean_rew = Statistics.mean(rews)
+            #             for forager in model.foragers[gid]
+            #                 if forager.chosen_patch != patch.id
+            #                     U = sym_utility_risk(mean_rew, forager.ρ)
+            #                     forager.Q[patch.id] += forager.α * (U - forager.Q[patch.id])
+            #                 end
+            #             end
+            #         end
+            #     end
+            # end
+            # enable communication for group 2
+            if model.comm
+                gid = 2
+                rews = learning_store[gid]
                 if length(rews) > 0
                     mean_rew = Statistics.mean(rews)
                     for forager in model.foragers[gid]
@@ -61,25 +77,27 @@ function step_modelA!(model::Agents.ABM)
 end
 function init_modelA(;
     forager_ns=[30, 30],
-    μ_logαs=[log(0.1), log(0.1)], σ_logαs=[0.3, 0.3],
+    μ_logαs=[log(0.01), log(0.01)], σ_logαs=[0.3, 0.3],
     μ_logρs=[log(0.9), log(0.9)], σ_logρs=[0.03, 0.03],
     μ_logβs=[log(0.72), log(0.72)], σ_logβs=[0.8, 0.8],
-    patch_n=30,
-    μ_base=10, σ_base=3,
+    patch_n=50,
+    μ_base=6,
     capacity=sum(forager_ns)/2,
     decay=1.0,
+    comm=false,
 )
     model = Agents.ABM(
                Union{ForagerA, PatchA},
                Agents.GridSpace((1,1));
                properties=Dict(
                                :patches=>Vector{PatchA}(undef, patch_n),
-                               :foragers=>[Vector{ForagerA}(undef, forager_n) for forager_n in forager_ns]
+                               :foragers=>[Vector{ForagerA}(undef, forager_n) for forager_n in forager_ns],
+                               :comm=>comm
                               ),
                warn=false
                )
     # add patches
-    bases = sort(rand(Distributions.Normal(μ_base, σ_base), patch_n))
+    bases = sort(rand(Distributions.Poisson(μ_base), patch_n))
     for i in 1:patch_n
         model.patches[i] = Agents.add_agent!((1,1), PatchA, model, bases[i], capacity, decay, ForagerA[])
     end
@@ -99,14 +117,14 @@ function init_modelA(;
 end
 function collect_modelA(model; steps=1000)
     patch_static = DataFrames.DataFrame(id=Int[], base=Float64[])
-    forager_static = DataFrames.DataFrame(id=Int[], α=Float64[], speed_rank=Int[], ρ=Float64[], β=Float64[], U=Vector{Float64}[]) # U is the real utility of every patch
+    forager_static = DataFrames.DataFrame(id=Int[], gid=Int[], α=Float64[], speed_rank=Int[], ρ=Float64[], β=Float64[], U=Vector{Float64}[]) # U is the real utility of every patch
     forager_dynamic = DataFrames.DataFrame(step=Int[], id=Int[], gid=Int[], chosen_patch=Int[], rew=Float64[], Q=Vector{Float64}[])
     for patch in model.patches
         push!(patch_static, (patch.id, patch.base))
     end
     U_scale = 1 + exp(model.patches[1].decay*(-model.patches[1].capacity))
     for forager in vcat(model.foragers...)
-        push!(forager_static, (forager.id, forager.α, forager.speed_rank, forager.ρ, forager.β, (patch_static.base./U_scale).^forager.ρ))
+        push!(forager_static, (forager.id, forager.gid, forager.α, forager.speed_rank, forager.ρ, forager.β, (patch_static.base./U_scale).^forager.ρ))
     end
     for step in 1:steps
         Agents.step!(model, Agents.dummystep, step_modelA!, 1)
@@ -122,19 +140,19 @@ function shock_modelA(model; steps=1000, μ_base=10, σ_base=3)
     end
     collect_modelA(model; steps)
 end
-function modelA_heatmaps(ps, fs, fd)
+function plot_modelA(ps, fs, fd)
     ps.id = map(string, ps.id)
     choice_plts = []
     Q_plts = []
+    rew_plts = []
     forager_grp_n = fd.gid[end]
     forager_n = nrow(fs)
     patch_n = nrow(ps)
-    bin_n = 250 # 250 bins
+    bin_n = 200 # 200 bins
     binwidth = fd.step[end] ÷ bin_n
 
     DataFrames.transform!(fd, :step => (x->(x .- 1) .÷ binwidth .* binwidth) => :stepbin)
     # barplot of patch bases
-    barbase = Plots.bar(ps.base, orientation=:horizontal, legend=false, xlabel="base")
     # group level choice
     gfd = @linq fd |>
         groupby([:stepbin, :gid]) |>
@@ -144,7 +162,9 @@ function modelA_heatmaps(ps, fs, fd)
         z = Matrix(DataFrames.unstack(gfd[gfd.gid .== gid, :], :stepbin, :patch_id, :patch_prop))'
         x = z[1, :]
         z = z[2:end, :]
-        push!(choice_plts, Plots.heatmap(x, ps.id, z, xlabel="step", ylabel="patch_id", title="group $gid patch choice"))
+        tmp = Plots.heatmap(x, ps.id, z, xlabel="step", ylabel="patch_id", title="group $gid patch choice")
+        tmp = Plots.scatter!(zeros(Int, patch_n), collect(1:patch_n).-0.5, markersize=ps.base, label="base")
+        push!(choice_plts, tmp)
     end
     # individual patch choice
     ifd = @linq fd |>
@@ -155,7 +175,7 @@ function modelA_heatmaps(ps, fs, fd)
         z = Matrix(DataFrames.unstack(ifd[ifd.id .== fid, :], :stepbin, :patch_id, :patch_prop))'
         x = z[1, :]
         z = z[2:end, :]
-        push!(choice_plts, Plots.heatmap(x, ps.id, z, xlabel="step", ylabel="patch_id", title="forager $fid patch choice\nα=$(fs.α[fid-patch_n])\nβ=$(fs.β[fid-patch_n])\nρ=$(fs.ρ[fid-patch_n])"))
+        push!(choice_plts, Plots.heatmap(x, ps.id, z, xlabel="step", ylabel="patch_id", title="forager $fid patch choice\nα=$(Formatting.sprintf1("%.3f", fs.α[fid-patch_n])), β=$(Formatting.sprintf1("%.3f", fs.β[fid-patch_n])), ρ=$(Formatting.sprintf1("%.3f", fs.ρ[fid-patch_n]))"))
     end
     # individual Q
     for fid in fs.id
@@ -166,8 +186,16 @@ function modelA_heatmaps(ps, fs, fd)
         z = z[2:end, :]
         push!(Q_plts, Plots.heatmap(x, ps.id, z, xlabel="step", ylabel="patch_id", title="forager $fid Q"))
     end
-    #MAYBE: color barplot with .series_list
-    barbase, choice_plts, Q_plts
+    # reward
+    rfd = @linq fd |>
+        groupby([:stepbin, :gid]) |>
+        combine(mean_rew = Statistics.mean(:rew))
+    rew_plt = @df rfd plot(:stepbin, :mean_rew, group=:gid, title="mean reward")
+    #
+    αd = @df fs density(:α, group=:gid, title="α distribution")
+    ρd = @df fs density(:ρ, group=:gid, title="ρ distribution")
+    βd = @df fs density(:β, group=:gid, title="β distribution")
+    choice_plts, Q_plts, rew_plt, αd, ρd, βd
     #plot(choice_plts[3], barbase, layout=grid(1, 2, widths=[0.9, 0.1]), link=:y)
 end
 function test1()
